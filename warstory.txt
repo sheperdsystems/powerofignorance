@@ -1,0 +1,17 @@
+This is a placeholder for a war story on programming performance.
+It supports and details the slide presentation originally prepared 
+for a meeting on November 12, 2019, in Sunnyvale, California.
+
+The major takeaway from this is that ignorance can be used as a tool
+to realize performance gains in a system quickly.  The mode by which
+this occurs is to have developers restrict their focus on a search
+space that is small enough to explore quickly for solutions.  In
+particular, the developers should force themselves to ignore certain
+aspects as mandatory constraints, and seek solutions that do not take
+such constraints into account.  Sometimes this allows one to develop
+questions and perspectives which result in a satisfactory solution
+which can later accommodate the ignored constraints.
+
+This material is copyrighted by Sheperd Systems.  License information 
+will be provided at a later date.
+Version 0.9placeholder copyright 2019 Sheperd Systems
