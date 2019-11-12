@@ -1,0 +1,417 @@
+
+Draft for The Power of Ignorance
+                    A programming performance war story
+
+written in preparation for LinkedIn Performance Engineering meetup 
+Nov. 12, 2019 in Sunnyvale, CA.
+
+"A war story is not meant to report what was; it is meant to tell 
+what could have been and to inspire what could be."
+
+This war story starts with my brother asking me if I would join his team 
+at a GPU Hackathon on Bioinformatics hosted by NVidia.  
+
+I said "Sure. I just have three questions."
+
+"What are they?" he said.
+
+I replied "What's a GPU, what is a hackathon, and what are Bioinformatics?  
+Oh, and a fourth question: who are these NVidia people?"
+
+[The real sequence of events was a little different, but similar in 
+character to what is told here.  I've also changed some names because 
+I felt like it. Go to the end for proper attributions.]
+
+My brother's goal at the time was to speed up performance of software 
+he was developing involving data from cancer patients.  You can ask him 
+for his story; we ended up working on something else.
+
+The speedup was to come from using systems for parallel programming with 
+arrays of GPUs, or Graphic Processor Units.  NVidia made hardware and 
+tools to aid in writing software for these systems.  The Oak Ridge 
+National Laboratory (ORNL) has Summit, a supercomputing cluster with 
+many nodes, each having a high-performance multi-core CPU and GPU Array, 
+giving many FLOPS to throw at an application.   
+
+ORNL and Nvidia were hosting a series of hackathons: the one in May was 
+held at Walnut Creek at JGI, the Joint Genomics Institute, where they 
+sequence and study a lot of DNA.  Thus the emphasis of this May hackathon 
+was on applications involving DNA nucleotide sequences, roughly 
+Bioinformatics.
+
+[There is a lot more about Bioinformatics than the above war story 
+characterization.  Go look it up later, if you want.]
+
+This hackathon was four and a half days of tutorials, scrum sessions and 
+coding and testing.  The point was to gain rapid and minimal familiarity 
+with an environment on the high-performance cluster, using the tools for 
+developing, profiling, and adapting software to a parallel programming 
+mode to distribute computational load, then take that knowledge away to 
+apply it to more software development.  There was some lead time to form 
+teams, one for each chosen application (my brother's team got merged 
+with a team working on Metabat); I had access to material and to a 
+preliminary online meeting (which I missed) of each team before the 
+event itself.  So historically, there was time before the hackathon to 
+learn about CUDA, OpenACC, and other systems for parallel programming, 
+the code base was made available, and we registered for accounts to gain 
+access to a government resource, a small cluster that (except for scale) 
+resembled the Summit cluster in Tennessee.  
+
+Even so, the (war story version of the) basic problem should be familiar:
+
+	Speed up an unknown application 	(metabat2) 
+        on a brand new architecture	
+		(Ascent cluster with each node having a GPU array) 
+	in a foreign software development environment 
+		(C++, Cmake, Boost, CUDA, OpenACC, module load, etc.) ...
+
+	... in 4 1/2 days.
+
+[Again, I exaggerate, but only slightly. It had been over a decade since 
+I dealt with C++ or make, and much of the rest I had not touched before 
+the hackathon.  Although I spent some time reading about the code and 
+the application, I learned more about the issues by asking the resident 
+experts than by my research.  For the purposes of the war story, you can 
+ignore anything in these and other square brackets.]
+
+One aspect of the power of ignorance is simplification.  Put in these 
+terms, the first step became clear.
+
+	Step 0: Find someone to show you how to log in, upload and build 
+        your code and data, and run test cases.
+
+Some of the hackathon story: we were expected to spend each day with an 
+introductory talk, essentially reviewing the goals for that day, then 
+each team would confer with their assigned mentor and other mentors on 
+site.  It was nicely catered, so we were encouraged to spend time in the 
+room with our laptops and net connections to the remote systems.  Our 
+team included two developers of the application we worked on, Rob Egan 
+and Ashleigh Thomas from Lawrence Berkeley Livermore Labs; in this story 
+most of my interactions were with Rob.
+
+Rob was familiar enough with the system that he helped me with Step 0.  
+Even so, it took me to day 2 before I felt confident enough to 
+experiment with the code and run a test case.
+
+Of course, that first day was also spent listening to a tutorial on 
+Step 0 and on CUDA and OpenACC.  There was also a daily scrum: each team 
+was assigned a few minutes to talk about their progress, their 
+roadblocks, and their plans for going forward.  This gave other teams 
+the opportunity to ask questions or give suggestions.
+
+Fernanda, one of the hosts from NVidia, gave us an idea of how the 
+journey through the hackathon was going to go emotionally, and helped 
+set our expectations, which I interpret as "Don't make things worse".  It 
+would have been great to get each application fully running and 
+debugged using one of the parallel programming modes on the cluster, 
+but that much was not expected for 4 1/2 days of sustained effort.  
+The hope was to learn enough so that the teams could go off and 
+complete the development after getting just enough success in the 
+hackathon environment.
+
+A goal for day 1 of the hackathon was to profile the application.  
+I did not get around to being comfortable with that until day 4.
+
+Again, to simplify:
+
+	If you don't know the code (or the hardware, or the 
+        environment), profile it.
+
+	If you do know the code, profile it anyway.
+
+This leads to the next obvious step.
+
+	Step 1: Find someone to show you how to profile the code and 
+        interpret the profiling data.
+
+In preparing the slides for the first talk, spell check helpfully 
+changed the application name from Metabat to Meatball,  so our team 
+became know as Meatballs.  (I wanted to include the anagram 
+LBL's A Team, but did not get popular assent for this.) The talk was 
+given by our mentor Zhengji, henceforth known as ZZ.  She introduced 
+our team, described the main feature of Metabat (essentially taking 
+a collection of DNA sequences and putting them in separate bins, each 
+bin representing a different organism phenotype), and a plan for going 
+forward using OpenACC.
+
+Before I talk about the code, I want to toss out some questions that 
+are encouraged by ignorance.  Often one wants to form questions towards 
+reducing one's ignorance.  The point here is that sometimes it is 
+helpful to maintain and perhaps even increase ignorance.
+
+	What if we had enough cheap preprocessing resources (memory, 
+        look up tables) to aid in the speed up?
+
+	What if we don't enough about the computational issues to do 
+        a reliable job (convergence in numerical analysis or 
+        race conditions in the parallel processing code)?
+
+	What if we don't need to know about the computational issues 
+        to win anyway?
+
+An important aspect of this is to describe efficiently the domain of 
+your knowledge and your proposed refactoring.  If the code is to be 
+maintained, predicting problems now and documenting them can save 
+development and testing time later.  You don't have to be right about 
+the predictions: you just have to be clear about what you do know and 
+what you don't know.  
+
+In the context of the hackathon, we had enough team members to explore 
+various avenues of speed up using the (to me) new tools.  I decided to 
+go with my strength of algorithm analysis and look at the computation
+flow.
+
+Rob told me of a hotspot: cal_tnf_dist.  Metabat was doing statistical 
+calculations to judge whether two strings belonged to the same bin, 
+and much of the analysis was based on tnfs, frequencies of occurence 
+of tetranucleotide chains, or in codespeak, a vector of frequencies of 
+occurences of length four substrings.  The subroutine cal_tnf_dist 
+used a logistic model to determine if this distance between two strings 
+was small, i.e. if the likelihood was high that two strands of DNA came 
+from the same organism.  This meant doing some logarithmic calculations, 
+using a bivariate polynomial of modest degree, and doing some 
+exponentiation on expressions based on the tnf fingerprint produced for 
+two given DNA sequences.
+
+The modified and simplified excerpts below are adapted from the C++ 
+source for cal_tnf_dist.  gexp stands for an expression involving A, B, 
+TMP, and an exponential function.  log is short for logarithm base 10:
+
+BEFORE
+double cal_tnf_dist (arrayindex i , j) {
+...
+    A = log(tnfdata[i]);
+    B = log(tnfdata[j]);
+
+    TMP = polynomial(A,B);
+
+    if (gexp(TMP) > 0.1){
+           TMP = poly2(A,B);
+           return gexp(TMP); }
+    else return 0.1;
+
+} 
+
+You might notice how to boost performance just from this simplification.  
+However, the context should give you a strong clue.  From the calling 
+routine, BIG is some big number and BIGGER is some larger number. (I use 
+pseudocode and iterator notation for narrative purpose.)
+
+    for(i in BIG) {
+       for (j  in BIGGER) {
+               val = cal_tnf_dist(i,j);
+               if ( val >  0.1 ) {
+                             do_stuff(val,...);
+                             }
+
+Pause here for a moment if you want to guess an optimization, then read 
+ahead.
+
+When you are working with computations that involve two or more 
+variables (the bivariate expressions polynomial and poly2), you have a 
+curse of dimensionality:  without more smarts about the problem, you 
+need to consider every pair of input values varying over a range, and 
+you need to be clever in how you arrange the computation to save on 
+resources.
+
+When the computations involve just one variable, memoize or precompute.  
+In this example, a reasonable guess is that log and gexp are the 
+processor hogs, and time is saved by not repeating the log and gexp 
+computations.  Here we can remove both log and exp from the routine, 
+using precomputation and lazy evaluation.
+
+In the (abbreviated for exposition, and not showing scaffolding) 
+solution we precompute the logs somewhere before the first call to 
+cal_tnf_dist (trading memory for time), and  (because of monotonicity 
+and other properties of the computation) we pull gexp out and compute 
+a constant GEXPINV0.1 to make a mathematically equivalent expression. 
+(See further below about due diligence.)  We delay computation of 
+(lazily evaluate) gexp until it is needed.
+
+AFTER
+...
+for ( i in BIGGER) { logtval[i] = log(tnfdata[i]); }
+...
+double new_cal_tnf_dist (arrayindex i , j) {
+...
+    A = logtval[i];
+    B = logtval[j];
+
+    TMP = polynomial(A,B);
+
+    if (TMP > GEXPINV0.1){
+           TMP = poly2(A,B);
+           return TMP; }
+    else return GEXPINV0.1;
+
+} 
+...
+    for(i in BIG) {
+       for (j  in BIGGER) {
+               newval= new_cal_tnf_dist(i,j);
+               if ( newval > GEXPINV0.1 ) {
+                             do_stuff(gexp(newval),...);
+                             }
+
+Due diligence: Not shown in the fragment is the scaffolding. We ran 
+both versions of the computation to report when there were 
+discrepancies between (say) cal_tnf_dist returning val > 0.1 and 
+new_cal_tnf_dist NOT returning the mathematically equivalent 
+newval > GEXPINV0.1.  Imagine our encouragement when the report came 
+back showing there was no computational inequivalence (so the
+computational equivalence looked like mathematical equivalence.) 
+Be sure to keep the scaffolding around to use in later versions of 
+the code.
+
+The algorithmic analysis of this is simple.  Leaving more accurate
+big-Oh estimates as an exercise, I use "about" and "at most" :
+
+Number of calls to time-expensive function
+call count        BEFORE  ->  AFTER
+log    about BIG*BIGGER   ->  at most BIGGER     
+exp    about BIG*BIGGER   ->  about BIG*log(BIGGER)  **
+
+** depends on input, but expected to occur more than 95% of the time
+
+It is important to have a realistic description of savings.  
+A potential cost here is logical and/or numerical inaccuracies 
+introduced by refactoring.  Scaffolding and desk-check analysis 
+should show how minimal this cost is expected to be.
+ 2  5 7 10 2  5 7  0 2  5 7 30 2  5 7  0 2  5 7 50 2  5 7  0 2  5 7 70
+
+I actually had this realization late on day 2 of the hackathon.  When 
+I told Rob of the needless recomputation of log to Rob, and after he 
+acknowledged that a solution like the above should work, I announced 
+"That's my contribution!" and then celebrated with a catered sandwich, 
+before getting down to coding.
+
+I had to do the scrum presentation the next day, and cautiously 
+announced that we had encountered some technical problems to which I 
+could not answer (Rob could, but he was out of the room at the time), 
+and that we had found some refactoring that had promise, perhaps 
+allowing an order of magnitude increase in the size of problems we could 
+handle.  I had drawn by hand a slide presentation which had more 
+mathematics than was palatable for ordinary consumption; those slides 
+got shelved.
+
+What was next?
+
+Profile again and find another hotspot. Briefly, there were two spots 
+that were easily improved.
+
+One was cal_abd_corr.  This was calculating a Pearson correlation 
+coefficient between two sequences of variables.  Like cal_tnf_dist, 
+there were some repeated calculations that could be eliminated by 
+precomputing.  Also, the main loop that did the correlation could be 
+optimized with the precomputed values, but there was danger of 
+numerical instability.  Although this had a some potential savings, 
+it was not implemented, so the actual benefit here is not known. 
+
+The other I call calc_tnf.  This amounted to a refactoring where, 
+instead of copying a length 4 substring from an address and then using 
+that substring as an index to a lookup table, and then repeating this 
+after incrementing the address one character size, one can read a 
+character, convert it to a "digit", and do essentially a numerical 
+shift operation with the new digit to replace the lookup table.  I 
+coded and tested a replacement; the original subroutine took 4 minutes 
+to do that on the test case; adding the redundant computation and 
+checking that it worked took 4 minutes and ten seconds.  Further, the 
+refactored version was more amenable to embarrassing parallelism on
+the GPU array than the standard string operations of the original code.
+
+Writing Efficient Programs, Jon Bentley's book, has a list of rules. 
+Precomputing the log is Rule 2 of trading space for time while moving 
+exp out of the routine is Rule 4 on lazy evaluation.  The recalculating 
+of TNF seems to defy this classification, but it resembles expression 
+rules 3 and 5.
+
+On the last day, team member Mike gave the scrum presentation where he 
+reported on the general savings shown above on cal_tnf_dist, and 
+measured for that routine 87% savings on the test case (about 8-fold 
+improvement for that part of the code), and an overall time savings of 
+more than 50%. A side effect was dampened enthusiasm for parallelizing 
+the rest of the code, as a major CPU bottleneck had been resolved.
+
+I asked Rob how the software update was going.  He seems happy with
+the performance improvements.  I see this as customer satisfaction.  
+He ran the new version and older version on a test case to observe a 
+speedup of about 2x (32 to 17 seconds).  He said this was impressive 
+considering that no changes were made in the core graph-generation part 
+of the program.
+
+I want to point out that the original code was written with the idea of 
+maintainability.  There were attempts at optimization in other areas of 
+the code.  The solution with precomputing and lazy evaluation above helps
+with performance, but care needs to be taken in refactoring to ensure 
+maintainability.
+
+What is the takeaway?
+
+Ignorance can be a hindrance.  Finding a good solution that requires 
+information you don't have also requires finding which kind of information 
+that is.  This is sometimes called research and is worthwhile, but it is 
+incompatible with meeting deadlines.
+
+Even without a deadline, having too much information can be a hindrance.
+Trying to deal with many factors in crafting a really good solution can 
+get in the way. 
+
+Often you don't need a really good solution; you need a good enough solution.
+
+Ignorance allows you to concentrate on important things that are familiar.  
+You can explore the potential solution space quickly to see what can be done 
+in a short time.  You can also tailor your solution for unknowns.
+
+I had various ideas based on computational mathematics (Horner's method 
+and approximation schemes in particular) for rewriting the polynomials in 
+cal_tnf_dist to save time on the GPU, but never got around to exploring them.  
+Nor did I finish the cal_abd_corr refactoring.  That's ok.  When it looks 
+like they may be needed, someone can go back to them.  The solution that was 
+implemented is good enough-- for now.  
+
+Although I learned some things about bioinformatics and parallel programming, 
+I did not need most of them to find this performance improvement.  It is not 
+clear if the time cost of redundant log, exp, copy and lookup computations 
+could have been fully absorbed by replicating them on the GPU array.
+
+In brief, Ignorance has the power to find a good enough solution quickly.
+Carefully managed, ignorance is part of perfomance engineer's toolkit.
+
+Oh.  Ignorance is no excuse for not profiling one's code.  Always profile.
+
+
+============
+Disambiguation: The Power of Ignorance here is not the Dunning-Kruger effect, 
+as mentioned by Dave Trott: 
+https://www.campaignlive.com/article/power-ignorance/1431402 .
+
+It is not 'The Power of Ignoreance' (my spelling) as marketed by Travis Maxwell 
+(satire):    https://www.youtube.com/watch?v=rW43cL8LpaA .
+
+Nor it is part of Plato's contemplation of knowledge in his Republic, Book V:
+https://www.oxfordscholarship.com/ has a link to an article on this; search it.
+This presentation is more like 'thoroughly conscious ignorance':
+https://www.brainpickings.org/2013/12/03/stuart-firestein-ted/
+
+Proper attributions: The hackathon was hosted at the
+Joint Genomic Institute in Walnut Creek. 
+https://jgi.doe.gov/
+
+Our gracious hosts were from Nvidia and Oak Ridge National Laboratory,
+who made a small powerful cluster, the Ascent system, available for testing.
+For some detail on the GPU hackathons, start here:
+https://www.olcf.ornl.gov/for-users/training/gpu-hackathons/
+
+Repository for metabat1 and metabat2 are here:
+https://bitbucket.org/berkeleylab/metabat/src
+
+We had a good team of mentors and hosts supporting us, in particular ZZ, Max,
+Julia, Fernanda, and Tom.  Again, thanks guys for the opportunity.
+
+The Meatballs team members were our mentor Zhengji Zhao (ZZ), 
+Rob Egan and Ashleigh Thomas from LBL who worked on the applications 
+Metabat and Metabat2, Mike D'Amour, Bill Paseman, and 
+myself, Gerhard Paseman.)
+
+https://github.com/sheperdsystems/powerofignorance
+201911112
